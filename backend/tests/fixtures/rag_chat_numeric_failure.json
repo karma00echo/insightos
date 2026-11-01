@@ -1,0 +1,106 @@
+{
+  "provenance": "Author-written synthetic citation-boundary regression. Legacy filename retained; not an archived provider response.",
+  "question": "请依据 Qdrant 示例，说明 Hybrid Search（Dense + BM25）与 Reranking 的分工和衔接，并标明资料未说明的内容。",
+  "sources": [
+    {
+      "id": "c778113b-7e7a-5fb4-9975-cdde7995abf0",
+      "chunk_id": "c778113b-7e7a-5fb4-9975-cdde7995abf0",
+      "document_id": "52db649f-0c59-502e-8160-179ffff04548",
+      "revision_id": "c2dfd749-0927-5a8b-9102-48a5bad771fa",
+      "knowledge_base_id": "11ba9539-c18e-5975-abf4-d0199be6c2da",
+      "knowledge_base_name": "Synthetic regression fixtures",
+      "document_name": "Qdrant synthetic regression.md",
+      "text": "# Qdrant synthetic example\nReranking is a precision step after candidate retrieval. This is an author-written test example, not a production source.",
+      "page": 1,
+      "ordinal": 1,
+      "source": "synthetic",
+      "score": 0.03,
+      "retrieval_score": 0.03,
+      "locator": {
+        "section": [
+          "Synthetic regression"
+        ],
+        "line_start": 1,
+        "line_end": 3,
+        "warnings": []
+      }
+    },
+    {
+      "id": "314d178d-fcf8-50f0-9187-54e9427a17e6",
+      "chunk_id": "314d178d-fcf8-50f0-9187-54e9427a17e6",
+      "document_id": "52db649f-0c59-502e-8160-179ffff04548",
+      "revision_id": "c2dfd749-0927-5a8b-9102-48a5bad771fa",
+      "knowledge_base_id": "11ba9539-c18e-5975-abf4-d0199be6c2da",
+      "knowledge_base_name": "Synthetic regression fixtures",
+      "document_name": "Qdrant synthetic regression.md",
+      "text": "# Qdrant Hybrid Search synthetic example\nDense embeddings and BM25 feed hybrid search; the candidate set then enters reranking. The query also uses late interaction embeddings. This author-written regression sample makes no latency claim.",
+      "page": 1,
+      "ordinal": 2,
+      "source": "synthetic",
+      "score": 0.03,
+      "retrieval_score": 0.03,
+      "locator": {
+        "section": [
+          "Synthetic regression"
+        ],
+        "line_start": 1,
+        "line_end": 3,
+        "warnings": []
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "stage": "initial",
+      "raw_answer": "Hybrid Search 使用 dense embeddings 与 BM25 [2]。查询使用 reranking[2]。查询使用 late interaction embeddings [2]。查询使用 dense embeddings[2]。查询使用 precision[1]。样例没有给出延迟指标[1][2]。",
+      "checked_answer": "Hybrid Search 使用 dense embeddings 与 BM25 [2]。\n查询使用 reranking[2]。\n查询使用 late interaction embeddings [2] [2][1]。\n查询使用 dense embeddings[2]。\n查询使用 precision[1]。\n样例没有给出延迟指标[1][2]。",
+      "verification": {
+        "mode": "numeric",
+        "passed": false,
+        "issues": [
+          "numeric_mismatch"
+        ],
+        "semantic_checked": false,
+        "model_calls": 0
+      },
+      "numeric_mismatches": [
+        {
+          "claim": "查询使用 late interaction embeddings [2]。",
+          "source_ids": [
+            2
+          ],
+          "values": [
+            "2"
+          ],
+          "expected_values": []
+        }
+      ]
+    },
+    {
+      "stage": "repair",
+      "raw_answer": "Hybrid Search 使用 dense embeddings 与 BM25 [2]。查询使用 reranking[2]。查询使用 late interaction embeddings [2]。查询使用 dense embeddings[2]。查询使用 precision[1]。样例没有给出延迟指标[1][2]。",
+      "checked_answer": "Hybrid Search 使用 dense embeddings 与 BM25 [2]。\n查询使用 reranking[2]。\n查询使用 late interaction embeddings [2] [2][1]。\n查询使用 dense embeddings[2]。\n查询使用 precision[1]。\n样例没有给出延迟指标[1][2]。",
+      "verification": {
+        "mode": "numeric",
+        "passed": false,
+        "issues": [
+          "numeric_mismatch"
+        ],
+        "semantic_checked": false,
+        "model_calls": 0
+      },
+      "numeric_mismatches": [
+        {
+          "claim": "查询使用 late interaction embeddings [2]。",
+          "source_ids": [
+            2
+          ],
+          "values": [
+            "2"
+          ],
+          "expected_values": []
+        }
+      ]
+    }
+  ]
+}

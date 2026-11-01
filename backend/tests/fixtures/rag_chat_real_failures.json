@@ -1,0 +1,78 @@
+{
+  "provenance": "Author-written synthetic cross-language regression. No private chunks, runtime IDs, or failed request IDs are distributed.",
+  "questions": [
+    "在基于 RAG 的 AI Agent 系统中，混合检索与重排分别解决什么问题？请分析两者的技术原理、协作流程及适用场景，并说明现有文档无法支持的结论。",
+    "请依据 Qdrant 教程，说明 Hybrid Search（Dense + BM25）与 Reranking 的分工和衔接，并标明资料未说明的内容。"
+  ],
+  "chunks": [
+    {
+      "id": "6addb3a0-90ba-599d-a1d8-f0225296a848",
+      "chunk_id": "6addb3a0-90ba-599d-a1d8-f0225296a848",
+      "document_id": "6458c553-eaac-5974-abba-b8df65a9cead",
+      "revision_id": "0226a4e9-edbf-5401-86cb-cacdeebacf32",
+      "knowledge_base_id": "11ba9539-c18e-5975-abf4-d0199be6c2da",
+      "knowledge_base_name": "Synthetic regression fixtures",
+      "document_name": "GPT-6 synthetic regression.md",
+      "text": "# GPT-6 synthetic example\nGPT-6 工作负载选择是一个独立主题。本样例没有介绍检索算法。",
+      "page": 1,
+      "ordinal": 3,
+      "source": "synthetic",
+      "score": 0.03,
+      "retrieval_score": 0.03,
+      "locator": {
+        "section": [
+          "Synthetic regression"
+        ],
+        "line_start": 1,
+        "line_end": 3,
+        "warnings": []
+      }
+    },
+    {
+      "id": "e5b54d77-0a63-5f5e-964e-1f0d86768a08",
+      "chunk_id": "e5b54d77-0a63-5f5e-964e-1f0d86768a08",
+      "document_id": "52db649f-0c59-502e-8160-179ffff04548",
+      "revision_id": "c2dfd749-0927-5a8b-9102-48a5bad771fa",
+      "knowledge_base_id": "11ba9539-c18e-5975-abf4-d0199be6c2da",
+      "knowledge_base_name": "Synthetic regression fixtures",
+      "document_name": "Qdrant synthetic regression.md",
+      "text": "# Qdrant Hybrid Search synthetic example\nThis author-written sample separates semantic dense retrieval, keyword BM25 search, and candidate reranking. It is not a benchmark.",
+      "page": 1,
+      "ordinal": 4,
+      "source": "synthetic",
+      "score": 0.03,
+      "retrieval_score": 0.03,
+      "locator": {
+        "section": [
+          "Synthetic regression"
+        ],
+        "line_start": 1,
+        "line_end": 3,
+        "warnings": []
+      }
+    },
+    {
+      "id": "a3da06b2-c99c-5d6f-85c6-5c892cfe81c7",
+      "chunk_id": "a3da06b2-c99c-5d6f-85c6-5c892cfe81c7",
+      "document_id": "52db649f-0c59-502e-8160-179ffff04548",
+      "revision_id": "c2dfd749-0927-5a8b-9102-48a5bad771fa",
+      "knowledge_base_id": "11ba9539-c18e-5975-abf4-d0199be6c2da",
+      "knowledge_base_name": "Synthetic regression fixtures",
+      "document_name": "Qdrant synthetic regression.md",
+      "text": "# Qdrant Retrieval Stage synthetic example\nDense embeddings and BM25 feed hybrid search; candidate retrieval and reranking are separate stages. This synthetic sample discusses keyword search, semantic retrieval, and late interaction embeddings.",
+      "page": 1,
+      "ordinal": 5,
+      "source": "synthetic",
+      "score": 0.03,
+      "retrieval_score": 0.03,
+      "locator": {
+        "section": [
+          "Synthetic regression"
+        ],
+        "line_start": 1,
+        "line_end": 3,
+        "warnings": []
+      }
+    }
+  ]
+}

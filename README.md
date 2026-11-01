@@ -1,15 +1,15 @@
-# InsightOS — Evidence-Based AI Research Agent
+# InsightOS — AI Deep Research Agent
 
-InsightOS MVP v1.0 turns a private document collection into cited answers and structured research reports. It combines local RAG with a bounded, persistent agent workflow: plan questions, retrieve evidence, synthesize findings, write a report, validate citations, and save an exportable version.
+InsightOS is an AI Research Workspace for multi-step research planning, Hybrid RAG, evidence-driven analysis, citation verification, and automated research report generation. MVP v1.0 follows a bounded, persistent agent workflow: plan questions, retrieve evidence, synthesize findings, write a report, validate citations, and save an exportable version.
 
-Built as a personal AI Agent portfolio project. The interface is primarily Chinese. Research orchestration is a **custom Python/SQL workflow, not LangGraph**. LangGraph appears in research source documents, not as the application's framework.
+Built as a personal AI Agent portfolio project. The interface is primarily Chinese. Research orchestration uses a custom Python/SQL workflow.
 
 ## Features
 
 - Knowledge-base management, document ingestion, indexing status, versions, and access scope.
 - Ordinary RAG chat with streaming drafts, final verification, cited excerpts, and conversation history.
-- Multi-step research plans, per-step retrieval, deduplicated evidence, conflicts, and gaps.
-- Evidence-bound findings and analysis, followed by an eight-section research report.
+- Multi-step research planning with Hybrid RAG retrieval, deduplicated evidence, conflict tracking, and explicit gaps.
+- Evidence-driven findings and analysis, followed by automated generation of an eight-section research report.
 - Source revision, location, permission, numeric, and evidence/step binding checks.
 - Saved research and report versions, history navigation, and Markdown export.
 - Research evaluation that separates citation validity from semantic quality review.

@@ -8,28 +8,37 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.decision_models import Decision, DecisionBasis
-from app.memory_models import MemoryRevision
+from app.memory_models import MemoryRevision, PersonalMemory
 from app.models import Chunk, Document, DocumentRevision, User, utcnow
 from app.services import decisions, memories
 from app.services.access import require_kb
 from app.source_change_models import SourceChange
 
 
-def resolve(db, user, kind, sid, version):
+def source_revision(db, user, kind, sid, version):
     if kind == "memory":
-        row = memories.owned(db, user, sid)
-        rev = db.get(MemoryRevision, (sid, int(version)))
+        row = db.get(PersonalMemory, sid, populate_existing=True)
+        if row is None or row.owner_id != user.id:
+            raise HTTPException(404, "记忆不存在")
+        rev = db.get(MemoryRevision, (sid, int(version)), populate_existing=True)
         if row.status != "active" or not rev or rev.confirmation != "confirmed" or memories.availability(db, user, row) == "unavailable":
             raise HTTPException(404, "来源不可用")
-        return [dict(text=rev.kind + "\n" + rev.content, locator={"revision": rev.version, "fields": ["kind", "content"]}, actor_id=rev.actor_id,
-                     changed_at=rev.created_at)], True
-    doc = db.get(Document, sid)
+        return rev
+    doc = db.get(Document, sid, populate_existing=True)
     if not doc:
         raise HTTPException(404, "来源不可用")
     require_kb(db, user, doc.knowledge_base_id)
-    rev = db.get(DocumentRevision, version)
+    rev = db.get(DocumentRevision, version, populate_existing=True)
     if not rev or rev.document_id != sid or doc.status == "deleting" or rev.status != "ready" or (doc.expires_at and doc.expires_at <= utcnow()) or not Path(rev.stored_path).is_file():
         raise HTTPException(404, "来源不可用")
+    return rev
+
+
+def resolve(db, user, kind, sid, version):
+    rev = source_revision(db, user, kind, sid, version)
+    if kind == "memory":
+        return [dict(text=rev.kind + "\n" + rev.content, locator={"revision": rev.version, "fields": ["kind", "content"]}, actor_id=rev.actor_id,
+                     changed_at=rev.created_at)], True
     # Legacy cleanup removes old retrieval chunks but retains original files.
     # Text parsers do not invoke OCR/vision; never invent vanished chunk IDs.
     if Path(rev.name).suffix.lower() in {".txt", ".md", ".csv", ".json", ".html", ".htm"}:
@@ -112,14 +121,19 @@ def payload(db, user, row, include_references=False):
         refs = references(db, user, row)
         result["references"] = refs[:100]
         result["references_truncated"] = len(refs) > 100
+    # Revalidate both revisions after comparison and reference lookup. They can
+    # disappear or become inaccessible while those reads are in progress.
+    try:
+        old = source_revision(db, user, row.kind, row.old_id, row.old_version)
+        new = source_revision(db, user, row.kind, row.new_id, row.new_version)
+    except (HTTPException, OSError):
+        return {"id": row.id, "state": "unavailable"}
+    result["source_changed_at"] = new.created_at
     if row.kind == "document":
-        result["binary_changed"] = db.get(DocumentRevision, row.old_version).sha256 != db.get(DocumentRevision, row.new_version).sha256
-        result["source_changed_at"] = db.get(DocumentRevision, row.new_version).created_at
+        result["binary_changed"] = old.sha256 != new.sha256
         result["source_changed_by"] = None  # uploader not bound to revision in existing schema
     else:
-        revision = db.get(MemoryRevision, (row.new_id, int(row.new_version)))
-        result["source_changed_at"] = revision.created_at
-        result["source_changed_by"] = revision.actor_id
+        result["source_changed_by"] = new.actor_id
     return result
 
 
@@ -133,8 +147,8 @@ def detect(db, user, body):
         row = existing or SourceChange(**fields)
         comparison = compare(db, user, row)
         if body.kind == "document" and row.old_id == row.new_id:
-            old = db.get(DocumentRevision, row.old_version)
-            new = db.get(DocumentRevision, row.new_version)
+            old = source_revision(db, user, row.kind, row.old_id, row.old_version)
+            new = source_revision(db, user, row.kind, row.new_id, row.new_version)
             if old.created_at >= new.created_at:
                 raise HTTPException(422, "版本顺序无效")
         if not existing:

@@ -4,11 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
-from app.models import new_id
+from app.memory_models import PersonalMemory
+from app.models import DocumentRevision, new_id
+from app.services import source_changes
 from test_api import register
 from test_decision_impact import analyze, impact  # noqa: F401
 from test_decisions import body, create
-from test_source_changes import memory_pair
+from test_source_changes import document_pair, memory_pair
 
 
 def test_source_delete_races_detection_without_resurrecting_content(client):
@@ -34,6 +36,48 @@ def test_source_delete_races_detection_without_resurrecting_content(client):
     assert c.post('/api/source-changes/detect', headers=h, json=pair).status_code == 404
 
 
+@pytest.mark.parametrize('loss', ['memory_delete', 'memory_revoke', 'document_old', 'document_new'])
+def test_source_loss_after_compare_hides_entire_change(client, monkeypatch, loss):
+    c = client
+    h = register(c)
+    if loss.startswith('memory'):
+        _, pair = memory_pair(c, h)
+    else:
+        _, pair = document_pair(c)
+    path = '/api/source-changes'
+    detected = c.post(path + '/detect', headers=h, json=pair)
+    assert detected.status_code == 200
+    change = detected.json()
+    assert change['state'] == 'changed' and change['differences']
+    compare = source_changes.compare
+
+    def compare_then_invalidate(db, user, row):
+        result = compare(db, user, row)
+        assert result['state'] == 'changed'
+        with c.app.state.database.session() as concurrent:
+            if loss.startswith('memory'):
+                memory = concurrent.get(PersonalMemory, pair['old']['id'])
+                if loss == 'memory_delete':
+                    concurrent.delete(memory)
+                else:
+                    memory.status = 'withdrawn'
+            else:
+                side = 'old' if loss == 'document_old' else 'new'
+                concurrent.delete(concurrent.get(DocumentRevision, pair[side]['version']))
+            concurrent.commit()
+        return result
+
+    detail = path + '/' + change['id']
+    with monkeypatch.context() as patch:
+        patch.setattr(source_changes, 'compare', compare_then_invalidate)
+        read = c.get(detail, headers=h)
+    assert read.status_code == 200
+    assert read.json() == {'id': change['id'], 'state': 'unavailable'}
+    assert c.get(detail, headers=h).json() == read.json()
+    assert c.get(path, headers=h).json()['items'] == []
+    assert c.post(path + '/detect', headers=h, json=pair).status_code == 404
+
+
 @pytest.mark.parametrize('operation', ['revoke', 'delete'])
 def test_memory_invalidated_inside_impact_model(impact, operation):
     c, h, target, state, _, _ = impact
@@ -43,7 +87,6 @@ def test_memory_invalidated_inside_impact_model(impact, operation):
     target.update(decision_id=decision['id'], change_id=change['id'])
 
     def invalidate():
-        from app.memory_models import PersonalMemory
         with c.app.state.database.session() as db:
             row = db.get(PersonalMemory, memory['id'])
             if operation == 'delete':

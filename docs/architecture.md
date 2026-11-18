@@ -139,3 +139,17 @@ SQL 原子计数和过期并发槽实现跨 API 副本的限流、容量与请�
 Alembic 接管原有表结构并保留原分块 ID，将已有内容迁移为来源版本和持久倒排。Compose 先完成迁移，再启动应用与 Worker。离线维护命令协调 SQL、文件和向量快照，使用校验清单、空目标保护以及恢复后查询验证。
 
 完整操作与边界见[团队治理与可靠性](enterprise.md)和[部署指南](deployment.md)。
+
+## InsightOS 2.0 Preview · Decision Continuity
+
+The chat-first Vue workspace keeps cited chat and bounded Deep Research available alongside decision and action views. FastAPI routes and SQLAlchemy services apply private-object authorization. Alembic revisions 010–014 add Memory, Decision, Action, source-change and impact-review records.
+
+| Stage | Persisted state and user control |
+| --- | --- |
+| Personal Memory | The user confirms a fact, preference or plan. The API records revisions and preserves the source relationship. |
+| Decision | Authorized sources provide evidence for a draft. Explicit confirmation creates a version with pinned source references. Reading current or historical content checks the underlying source authorization. |
+| Action | A user approves an action linked to a decision version, or creates an independent action. State, deadline and revision history belong to the action. Decision progress groups approved actions by state. |
+| Source change | The user requests a comparison of two supported versions. The ledger records metadata. Reads recompute authorized differences and locate explicit decision references. |
+| Impact review | The user selects a source change and a current decision. The service checks the references and bounds the model input and structured output. Review choices persist metadata. The original editor requires confirmation before creating a decision revision. |
+
+When source access is lost, reads protect dependent content and derived evidence. An action keeps its independent status. The isolated verification exercises these paths with real Cookie authentication, business APIs and SQLite, with Mock responses for model features. The [Preview validation](preview-validation.md) distinguishes those checks from production recovery and real-provider quality.

@@ -1,24 +1,37 @@
 <script setup lang="ts">
 import ResearchStarters from './components/ResearchStarters.vue'
+import DecisionDiscussion from './components/DecisionDiscussion.vue'
+import DecisionCenter from './components/DecisionCenter.vue'
+import ActionCenter from './components/ActionCenter.vue'
 import DeepResearch from './components/DeepResearch.vue'
-import ResearchEvaluation from './components/ResearchEvaluation.vue'
-import ResearchEvaluationResult from './components/ResearchEvaluationResult.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ArrowDownToLine, ArrowRight, ArrowUp, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Database, FileCheck2, FileSearch, FileText, FlaskConical, FolderOpen, Layers3, LoaderCircle, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Trash2, UploadCloud, X, Zap } from 'lucide-vue-next'
+import { ArrowDownToLine, ArrowRight, ArrowUp, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, CircleHelp, Clock3, Database, FileCheck2, FileSearch, FileText, FolderOpen, Layers3, LoaderCircle, LogOut, Menu, MessageSquare, Plus, RefreshCw, Search, Settings2, ShieldCheck, Sparkles, Trash2, UploadCloud, X, Zap } from 'lucide-vue-next'
 import { api, ApiError, API_BASE, downloadDocument, streamChat } from './api'
 import GovernancePanel from './components/GovernancePanel.vue'
 import DocumentVersions from './components/DocumentVersions.vue'
+import SourceChanges from './components/SourceChanges.vue'
 import { submitUploads, type UploadItem } from './uploadQueue'
-import type { ChatResponse, Chunk, Citation, Comparison, Conversation, Document, Evaluation, EvaluationCase, Job, KnowledgeBase, Message, Runtime, User } from './api'
+import type { ChatResponse, Chunk, Citation, Conversation, Document, Job, KnowledgeBase, Message, Runtime, User } from './api'
 
-type View = 'library' | 'chat' | 'research' | 'evaluations' | 'governance' | 'system'
+type View = 'actions' | 'decisions' | 'library' | 'chat' | 'research' | 'governance' | 'system'
 const user = ref<User | null>(null)
 const restoring = ref(true)
 const authMode = ref<'login' | 'register'>('login')
 const auth = ref({ email: '', password: '', name: '' })
 const authenticating = ref(false)
 const authError = ref('')
-const view = ref<View>('chat')
+// Unknown or retired page values always resolve to the Chat-first home.
+function normalizeView(next: unknown): View {
+  return next === 'actions' || next === 'decisions' || next === 'library' || next === 'research' || next === 'governance' || next === 'system' ? next : 'chat'
+}
+const currentView = ref<unknown>('chat')
+const view = computed<View>({ get: () => normalizeView(currentView.value), set: next => { currentView.value = normalizeView(next) } })
+const decisionId = ref('')
+const impactChangeId = ref('')
+const actionId = ref('')
+function openAction(id: string) { go('actions'); actionId.value = id }
+function openDecision(id: string) { impactChangeId.value = ''; decisionId.value = id; go('decisions') }
+function openImpact(id: string, changeId: string) { decisionId.value = id; impactChangeId.value = changeId; go('decisions') }
 const mobileNav = ref(false)
 const error = ref('')
 const notice = ref('')
@@ -69,17 +82,19 @@ const chunkCount = computed(() => documents.value.reduce((total, doc) => total +
 const totalSize = computed(() => documents.value.reduce((total, doc) => total + (doc.size_bytes || 0), 0))
 const navItems: { id: View; label: string; en: string; icon: typeof BookOpen }[] = [
   { id: 'chat', label: 'AI 对话', en: 'Assistant', icon: MessageSquare },
+  { id: 'decisions', label: '我的决策', en: 'Decision Center', icon: FileCheck2 },
+  { id: 'actions', label: '我的行动', en: 'Action Center', icon: CheckCheck },
   { id: 'research', label: '深度研究', en: 'Deep Research', icon: FileSearch },
   { id: 'library', label: '知识库管理', en: 'Knowledge', icon: BookOpen },
-  { id: 'evaluations', label: '评测中心', en: 'Evaluation', icon: FlaskConical },
   { id: 'governance', label: '团队与治理', en: 'Governance', icon: ShieldCheck },
 ]
-const titles = { library: '知识空间', chat: '智能问答', research: '深度研究', evaluations: '评测中心', system: '系统与模型', governance: '团队与治理' }
+const titles = { actions: '我的行动', decisions: '我的决策', library: '知识空间', chat: '智能问答', research: '深度研究', system: '系统与模型', governance: '团队与治理' }
 
 const conversations = ref<Conversation[]>([])
 const conversationId = ref('')
 const messages = ref<Message[]>([])
 const question = ref('')
+const decisionDiscussion = ref(false)
 const chatMode = ref<'standard' | 'agent'>('standard')
 const chatKbIds = ref<string[]>([])
 const chatLoading = ref(false)
@@ -95,17 +110,6 @@ const focusMessage = computed(() => messages.value.find(msg => msg.id === focuse
 const evidence = computed(() => focusMessage.value?.citations || [])
 const trace = computed(() => focusMessage.value?.trace || [])
 
-const evaluations = ref<Evaluation[]>([])
-const evaluation = ref<Evaluation | null>(null)
-const evaluationName = ref('')
-const evaluationCases = ref<EvaluationCase[]>([{ question: '', reference: '', expected_document_ids: [] }])
-const evaluationKbIds = ref<string[]>([])
-const useRagas = ref(false)
-const evaluating = ref(false)
-const comparing = ref(false)
-const comparison = ref<Comparison | null>(null)
-const evaluationLoading = ref(false)
-const metricNames: Record<string, string> = { hit_rate: '命中率', recall: '召回率', precision: '精确率', mrr: 'MRR', mean_reciprocal_rank: 'MRR', context_precision: '上下文精确率', context_recall: '上下文召回率', answer_relevancy: '答案相关性', faithfulness: '忠实度', answer_similarity: '答案相似度', citation_coverage: '引用覆盖率', avg_latency_ms: '平均延迟 (ms)', latency_ms: '延迟 (ms)', lexical_overlap: '词项重合度', reference_overlap: '参考答案重合度', case_count: '测试用例', count: '数量', retrieval_hit_rate: '检索命中率', hit_at_5: 'Hit@5 命中率', recall_at_5: 'Recall@5 召回率', mrr_at_5: 'MRR@5', labeled_cases: '已标注用例', total_cases: '总用例', reference_token_recall: '参考词项召回率', ragas_enabled: 'Ragas 评测', reciprocal_rank: '倒数排名', question: '问题', reference: '参考答案', answer: '生成答案', contexts: '检索上下文', citations: '来源引用', expected_document_ids: '期望来源 ID', retrieved_document_ids: '检索来源 ID', provider: '回答模型', cached: '缓存命中' }
 let pollTimer: ReturnType<typeof setInterval> | undefined
 let healthTimer: ReturnType<typeof setInterval> | undefined
 let checkingHealth = false
@@ -127,14 +131,6 @@ function display(value: unknown): string {
   if (typeof value === 'object') return JSON.stringify(value, null, 2)
   return String(value)
 }
-function metric(value: unknown) {
-  if (typeof value === 'boolean') return value ? '已启用' : '未启用'
-  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3)
-  return display(value)
-}
-function comparisonMetrics(result: Record<string, unknown>): Record<string, unknown> {
-  return result.metrics && typeof result.metrics === 'object' && !Array.isArray(result.metrics) ? result.metrics as Record<string, unknown> : result
-}
 function date(value?: string) {
   if (!value) return '—'
   const parsed = new Date(/Z$|[+-]\d\d:\d\d$/.test(value) ? value : value + 'Z')
@@ -152,7 +148,7 @@ function progress(doc: Document) {
   const value = doc.job_id ? jobs.value[doc.job_id]?.progress || 0 : 0
   return Math.max(0, Math.min(100, value > 0 && value <= 1 ? value * 100 : value))
 }
-function go(next: View) { view.value = next; mobileNav.value = false; error.value = '' }
+function go(next: unknown) { if (next !== 'actions') actionId.value = '';  if (next !== 'decisions') { decisionId.value = ''; impactChangeId.value = '' } if (next !== 'chat') decisionDiscussion.value = false; view.value = normalizeView(next); mobileNav.value = false; error.value = '' }
 function toggleId(ids: string[], id: string) { const index = ids.indexOf(id); index >= 0 ? ids.splice(index, 1) : ids.push(id) }
 function selectKb(id: string) { selectedKbId.value = id; documentQuery.value = '' }
 
@@ -168,14 +164,13 @@ async function loadWorkspace() {
   organizations.value = await api<{ id: string; name: string; role: string }[]>('/organizations').catch(() => [])
   const results = await Promise.allSettled([
     api<KnowledgeBase[]>('/knowledge-bases'), api<Document[]>('/documents'), api<Runtime>('/system'),
-    api<Conversation[]>('/conversations'), api<Evaluation[]>('/evaluations'),
+    api<Conversation[]>('/conversations'),
   ])
-  const [kbResult, docResult, runtimeResult, conversationResult, evaluationResult] = results
+  const [kbResult, docResult, runtimeResult, conversationResult] = results
   if (kbResult.status === 'fulfilled') { knowledgeBases.value = kbResult.value; if (!kbResult.value.some(kb => kb.id === selectedKbId.value)) selectedKbId.value = kbResult.value[0]?.id || '' } else fail(kbResult.reason)
   if (docResult.status === 'fulfilled') documents.value = docResult.value; else fail(docResult.reason)
   if (runtimeResult.status === 'fulfilled') runtime.value = runtimeResult.value; else fail(runtimeResult.reason)
   if (conversationResult.status === 'fulfilled') conversations.value = conversationResult.value; else fail(conversationResult.reason)
-  if (evaluationResult.status === 'fulfilled') evaluations.value = evaluationResult.value; else fail(evaluationResult.reason)
   busy.value = false
 }
 async function signIn() {
@@ -184,15 +179,17 @@ async function signIn() {
     const payload = authMode.value === 'register' ? auth.value : { email: auth.value.email, password: auth.value.password }
     const response = await api<{ access_token: string; user: User }>(`/auth/${authMode.value}`, { method: 'POST', body: JSON.stringify(payload) })
     localStorage.removeItem('zhiheng_token'); user.value = response.user
-    await loadWorkspace(); await checkHealth()
+    go('chat'); await loadWorkspace(); await checkHealth()
   } catch (reason) { authError.value = reason instanceof Error ? reason.message : '登录失败' }
   finally { authenticating.value = false }
 }
 function logout() {
+  actionId.value = ''; decisionId.value = ''; impactChangeId.value = ''
+  decisionDiscussion.value = false
   void api('/auth/logout', { method: 'POST' }).catch(() => {})
   chatController?.abort()
   localStorage.removeItem('zhiheng_token'); pendingDelete.value = null; user.value = null; documents.value = []; knowledgeBases.value = []
-  runtime.value = null; conversations.value = []; messages.value = []; evaluations.value = []; evaluation.value = null
+  runtime.value = null; conversations.value = []; messages.value = []
   conversationId.value = ''; chatKbIds.value = []; view.value = 'chat'; lastAttempt = null; lastResponse.value = null; selectedKbId.value = ''; error.value = ''; auth.value.password = ''
 }
 async function createKb() {
@@ -210,7 +207,6 @@ async function removeKb() {
   try {
     await api(`/knowledge-bases/${selectedKb.value.id}`, { method: 'DELETE' })
     chatKbIds.value = chatKbIds.value.filter(id => id !== selectedKbId.value)
-    evaluationKbIds.value = evaluationKbIds.value.filter(id => id !== selectedKbId.value)
     await loadWorkspace(); notify('知识库已删除。')
   } catch (reason) { fail(reason) } finally { deleting.value = '' }
 }
@@ -294,8 +290,9 @@ async function openPreview(doc: Document) {
 async function download(id: string, name: string, revisionId?: string) {
   try { await downloadDocument(id, name, revisionId) } catch (reason) { fail(reason) }
 }
-function newConversation() { if (chatLoading.value || historyLoading.value) return; go('chat'); lastAttempt = null; error.value = ''; chatDraft.value = ''; evidenceOpen.value = false; conversationId.value = ''; messages.value = []; question.value = ''; focusedMessageId.value = ''; focusedCitationId.value = ''; lastResponse.value = null; traceOpen.value = false }
+function newConversation() { if (chatLoading.value || historyLoading.value) return; decisionDiscussion.value = false; go('chat'); lastAttempt = null; error.value = ''; chatDraft.value = ''; evidenceOpen.value = false; conversationId.value = ''; messages.value = []; question.value = ''; focusedMessageId.value = ''; focusedCitationId.value = ''; lastResponse.value = null; traceOpen.value = false }
 async function openConversation(id: string) {
+  decisionDiscussion.value = false
   if (chatLoading.value || historyLoading.value) return
   go('chat'); error.value = ''; evidenceOpen.value = false; lastAttempt = null
   historyLoading.value = true
@@ -337,63 +334,6 @@ async function askQuestion() {
 function handleComposerEnter(event: KeyboardEvent) { if (event.isComposing || event.keyCode === 229) return; event.preventDefault(); void askQuestion() }
 function scrollMessages() { setTimeout(() => messageList.value?.scrollTo({ top: messageList.value.scrollHeight, behavior: 'smooth' }), 80) }
 function focusCitation(messageId: string, citation: Citation) { focusedMessageId.value = messageId; focusedCitationId.value = citation.chunk_id; evidenceOpen.value = true }
-function addCase() { evaluationCases.value.push({ question: '', reference: '', expected_document_ids: [] }) }
-function addHistoryCase(message: Message) {
-  const messageIndex = messages.value.findIndex(item => item.id === message.id)
-  const originalQuestion = messages.value.slice(0, messageIndex).reverse().find(item => item.role === 'user')?.content
-  if (!originalQuestion) { error.value = '未找到这条历史答案对应的问题，请重新打开会话后重试。'; return }
-  if (evaluationCases.value.some(item => item.message_id === message.id)) { go('evaluations'); notify('这条历史答案已经在评测用例中。'); return }
-  const testCase: EvaluationCase = { question: originalQuestion, reference: '', expected_document_ids: [], message_id: message.id }
-  const initial = evaluationCases.value[0]
-  if (evaluationCases.value.length === 1 && initial && !initial.question && !initial.reference && !initial.message_id) evaluationCases.value = [testCase]
-  else evaluationCases.value.push(testCase)
-  evaluationKbIds.value = [...chatKbIds.value]
-  if (!evaluationName.value) evaluationName.value = '历史问答离线复评'
-  evidenceOpen.value = false; go('evaluations'); notify('已加入历史答案，填写参考答案后即可复评，无需重新生成。')
-}
-function acceptResearchEvaluation(run: Evaluation) { evaluation.value = run; evaluations.value = [run, ...evaluations.value.filter(item => item.id !== run.id)] }
-function validCases(): EvaluationCase[] | null {
-  if (!evaluationCases.value.length || evaluationCases.value.some(item => !item.question.trim() || !item.reference.trim())) {
-    error.value = '请为每个测试用例填写问题和参考答案。'; return null
-  }
-  return evaluationCases.value.map(item => ({ question: item.question.trim(), reference: item.reference.trim(), expected_document_ids: item.expected_document_ids || [], ...(item.message_id ? { message_id: item.message_id } : {}) }))
-}
-async function runEvaluation() {
-  const cases = validCases(); if (!cases) return
-  const previousIds = new Set(evaluations.value.map(item => item.id))
-  evaluating.value = true; error.value = ''
-  try {
-    const result = await api<Evaluation>('/evaluations', { method: 'POST', body: JSON.stringify({ name: evaluationName.value.trim() || `评测 ${new Date().toLocaleString('zh-CN')}`, cases, knowledge_base_ids: evaluationKbIds.value, use_ragas: useRagas.value }) })
-    evaluation.value = result; evaluations.value = await api<Evaluation[]>('/evaluations'); notify('评测已提交，结果显示在下方。')
-  } catch (reason) {
-    fail(reason)
-    try {
-      evaluations.value = await api<Evaluation[]>('/evaluations')
-      const savedFailure = evaluations.value.find(item => !previousIds.has(item.id))
-      if (savedFailure) evaluation.value = savedFailure
-    } catch { /* Preserve the actionable error from the original evaluation request. */ }
-  } finally { evaluating.value = false }
-}
-let evalPollRunning = false
-async function pollEvaluations() {
-  if (!user.value || evalPollRunning || !evaluations.value.some(item => ['queued', 'running'].includes(item.status))) return
-  evalPollRunning = true
-  try {
-    evaluations.value = await api<Evaluation[]>('/evaluations')
-    if (evaluation.value && ['queued', 'running'].includes(evaluation.value.status)) evaluation.value = await api<Evaluation>(`/evaluations/${evaluation.value.id}`)
-  } catch (reason) { fail(reason) } finally { evalPollRunning = false }
-}
-async function compareBaseline() {
-  const cases = validCases(); if (!cases) return
-  if (cases.some(item => !item.expected_document_ids?.length)) { error.value = '比较检索命中率前，请为每个用例选择至少一篇期望命中的文档。'; return }
-  comparing.value = true; error.value = ''
-  try { comparison.value = await api<Comparison>('/evaluations/compare', { method: 'POST', body: JSON.stringify({ cases: cases.map(({ message_id: _messageId, ...item }) => item), knowledge_base_ids: evaluationKbIds.value }) }) }
-  catch (reason) { fail(reason) } finally { comparing.value = false }
-}
-async function openEvaluation(id: string) {
-  evaluationLoading.value = true
-  try { evaluation.value = await api<Evaluation>(`/evaluations/${id}`) } catch (reason) { fail(reason) } finally { evaluationLoading.value = false }
-}
 async function refreshSystem() { busy.value = true; try { runtime.value = await api<Runtime>('/system'); await checkHealth() } catch (reason) { fail(reason) } finally { busy.value = false } }
 onMounted(async () => {
   await checkHealth()
@@ -404,7 +344,7 @@ onMounted(async () => {
     catch (reason) { localStorage.removeItem('zhiheng_token'); if (!(reason instanceof ApiError && reason.status === 401)) authError.value = reason instanceof Error ? reason.message : '无法恢复登录' }
   }
   restoring.value = false
-  pollTimer = setInterval(() => { void pollJobs(); void pollEvaluations() }, 2500)
+  pollTimer = setInterval(() => { void pollJobs() }, 2500)
   healthTimer = setInterval(() => { void checkHealth() }, 30_000)
 })
 onUnmounted(() => { clearInterval(pollTimer); clearInterval(healthTimer); clearTimeout(noticeTimer); chatController?.abort(); uploadController?.abort() })
@@ -416,9 +356,9 @@ onUnmounted(() => { clearInterval(pollTimer); clearInterval(healthTimer); clearT
   <div v-else-if="!user" class="auth-shell">
     <div class="auth-story">
       <a class="brand auth-brand" href="#"><span class="brand-mark"><Layers3 :size="25" /></span><span>InsightOS<small>RESEARCH WORKSPACE</small></span></a>
-      <div class="story-copy"><span class="eyebrow"><span class="mini-line"></span> KNOWLEDGE, WITH EVIDENCE.</span><h1>让每一份知识，<br>成为有据可循的答案<span>。</span></h1><p>连接分散的文档，检索真正相关的证据，<br>在一个工作台里完成知识管理、智能问答与质量评测。</p></div>
+      <div class="story-copy"><span class="eyebrow"><span class="mini-line"></span> KNOWLEDGE, WITH EVIDENCE.</span><h1>让每一份知识，<br>成为有据可循的答案<span>。</span></h1><p>连接分散的文档，检索真正相关的证据，<br>在一个工作台里完成知识管理、智能问答与证据溯源。</p></div>
       <div class="story-diagram"><div class="diagram-source"><FileText :size="22" /><span>企业文档</span><small>PDF · Word · 图片 · 文本</small></div><span class="diagram-line"></span><div class="diagram-engine"><Layers3 :size="29" /><span>InsightOS</span></div><span class="diagram-line"></span><div class="diagram-source"><ShieldCheck :size="22" /><span>可追溯的答案</span><small>原文引用 · 检索轨迹</small></div></div>
-      <div class="story-footer"><span><ShieldCheck :size="15" /> 用户数据隔离</span><span><FileSearch :size="15" /> 原文证据溯源</span><span><FlaskConical :size="15" /> 真实质量评测</span></div>
+      <div class="story-footer"><span><ShieldCheck :size="15" /> 用户数据隔离</span><span><FileSearch :size="15" /> 原文证据溯源</span><span><CheckCheck :size="15" /> 严格引用核验</span></div>
     </div>
     <div class="auth-panel"><div class="auth-card"><span class="eyebrow">YOUR KNOWLEDGE WORKSPACE</span><h2>{{ authMode === 'login' ? '欢迎回来' : '创建你的知识空间' }}</h2><p>{{ authMode === 'login' ? '登录InsightOS，继续探索你的知识。' : '从第一份文档开始，积累可信赖的知识。' }}</p>
       <div class="auth-tabs"><button :class="{ active: authMode === 'login' }" @click="authMode = 'login'; authError = ''">登录账号</button><button :class="{ active: authMode === 'register' }" @click="authMode = 'register'; authError = ''">注册账号</button></div>
@@ -443,6 +383,7 @@ onUnmounted(() => { clearInterval(pollTimer); clearInterval(healthTimer); clearT
       <div v-if="error" class="global-error alert error-alert" role="alert"><span>{{ error }}</span><button class="icon-button" aria-label="关闭错误提示" @click="error = ''"><X :size="16" /></button></div>
 
       <main v-if="view === 'library'" class="page library-page">
+        <SourceChanges :key="user.id" :documents="documents" @open-impact="openImpact" @unauthorized="logout" />
         <div class="page-heading"><div><span class="eyebrow">YOUR KNOWLEDGE, CONNECTED</span><h1>知识库</h1><p>让研究资料井然有序，让知识随时可用。</p></div><button class="btn primary" @click="showKbModal = true"><Plus :size="17" />新建知识库</button></div>
         <div class="stats-grid"><div class="stat-card"><span class="stat-icon teal"><Layers3 :size="19" /></span><div><span>知识库</span><strong>{{ knowledgeBases.length }}<small>个</small></strong></div><span class="stat-caption">按主题组织知识</span></div><div class="stat-card"><span class="stat-icon blue"><FileText :size="19" /></span><div><span>文档总量</span><strong>{{ documents.length }}<small>份</small></strong></div><span class="stat-caption">{{ bytes(totalSize) }} 已存储</span></div><div class="stat-card"><span class="stat-icon violet"><Database :size="19" /></span><div><span>知识分块</span><strong>{{ chunkCount.toLocaleString() }}<small>段</small></strong></div><span class="stat-caption">可检索的知识单元</span></div><div class="stat-card"><span class="stat-icon amber"><FileCheck2 :size="19" /></span><div><span>可用文档</span><strong>{{ readyDocuments }}<small>份</small></strong></div><span class="stat-caption">已发布且有效的版本</span></div></div>
         <section class="section-block"><div class="section-heading"><h2>我的知识库 <span>{{ knowledgeBases.length }}</span></h2><button class="text-button" :disabled="busy" @click="loadWorkspace"><RefreshCw :size="14" :class="{ spin: busy }" /> 刷新</button></div>
@@ -468,30 +409,23 @@ onUnmounted(() => { clearInterval(pollTimer); clearInterval(healthTimer); clearT
 
       <main v-else-if="view === 'chat'" class="chat-page"><div class="chat-workspace" :class="{ 'has-evidence': evidenceOpen }">
           <section class="chat-main" :class="{ 'welcome-state': !messages.length && !historyLoading }"><div class="chat-top"><div><span class="eyebrow">ASK YOUR KNOWLEDGE</span><h2>研究与知识对话 <Sparkles :size="17" /></h2></div><div class="segmented"><button :class="{ active: chatMode === 'standard' }" :disabled="chatLoading" @click="chatMode = 'standard'">标准检索</button><button :class="{ active: chatMode === 'agent' }" :disabled="chatLoading" @click="chatMode = 'agent'"><Zap :size="13" />Agent</button></div></div>
-            <div class="mobile-chat-tools"><button class="text-button" :disabled="chatLoading" @click="newConversation"><Plus :size="13" />新会话</button><select :value="conversationId" aria-label="会话历史" :disabled="chatLoading || historyLoading" @change="($event.target as HTMLSelectElement).value ? openConversation(($event.target as HTMLSelectElement).value) : newConversation()"><option value="">当前新会话</option><option v-for="item in conversations" :key="item.id" :value="item.id">{{ item.title }}</option></select><button class="text-button evidence-toggle" @click="evidenceOpen = true"><FileSearch :size="13" />证据 / 轨迹</button></div>
+            <div class="button-row"><button type="button" class="btn secondary" :disabled="chatLoading || historyLoading" @click="decisionDiscussion = !decisionDiscussion">{{ decisionDiscussion ? '关闭临时决策讨论' : '个人决策讨论（临时）' }}</button></div>
+            <DecisionDiscussion v-if="decisionDiscussion" @unauthorized="logout" @open-decision="openDecision" />
+            <template v-else><div class="mobile-chat-tools"><button class="text-button" :disabled="chatLoading" @click="newConversation"><Plus :size="13" />新会话</button><select :value="conversationId" aria-label="会话历史" :disabled="chatLoading || historyLoading" @change="($event.target as HTMLSelectElement).value ? openConversation(($event.target as HTMLSelectElement).value) : newConversation()"><option value="">当前新会话</option><option v-for="item in conversations" :key="item.id" :value="item.id">{{ item.title }}</option></select><button class="text-button evidence-toggle" @click="evidenceOpen = true"><FileSearch :size="13" />证据 / 轨迹</button></div>
 
             <p class="active-scope">下一次检索：{{ chatKbIds.length ? knowledgeBases.filter(kb => chatKbIds.includes(kb.id)).map(kb => kb.name).join('、') : '全部可访问知识库' }} · {{ runtime?.llm_model || '本地摘录模式' }}</p>
             <div ref="messageList" class="messages" role="log" aria-label="对话消息" aria-live="polite"><div v-if="historyLoading" class="chat-loading"><LoaderCircle class="spin" :size="24" />正在读取会话…</div><div v-else-if="!messages.length" class="chat-welcome"><span class="welcome-symbol"><Sparkles :size="31" /></span><span class="eyebrow">YOUR RESEARCH STARTS HERE</span><h1>你好，欢迎来到 <span>InsightOS</span></h1><p>连接你的知识，从一个好问题开始。</p><button v-if="!readyDocuments" class="text-button" @click="go('library')">先去上传一份文档 <ArrowRight :size="15" /></button></div>
-              <article v-for="message in messages" :key="message.id" class="message" :class="message.role"><span class="message-avatar"><Sparkles v-if="message.role === 'assistant'" :size="18" /><span v-else>{{ user.name?.slice(0, 1) || '我' }}</span></span><div class="message-body"><div class="message-author">{{ message.role === 'assistant' ? 'InsightOS' : user.name || '我' }}<small v-if="message.role === 'assistant'">基于知识库证据</small></div><div class="message-content">{{ message.content }}</div><div v-if="message.citations?.length" class="message-citations"><button v-for="(citation, index) in message.citations" :key="citation.chunk_id" :class="{ active: focusedMessageId === message.id && focusedCitationId === citation.chunk_id }" @click="focusCitation(message.id, citation)"><span>{{ index + 1 }}</span>{{ citation.document_name }}<small>{{ citationLocation(citation) }}</small></button></div><button v-if="message.role === 'assistant'" class="message-evidence-button" @click="focusedMessageId = message.id; traceOpen = true; evidenceOpen = true"><Layers3 :size="12" />查看检索轨迹 <ChevronRight :size="12" /></button><button v-if="message.role === 'assistant'" class="message-evaluation-button" @click="addHistoryCase(message)"><FlaskConical :size="12" />加入评测</button></div></article>
+              <article v-for="message in messages" :key="message.id" class="message" :class="message.role"><span class="message-avatar"><Sparkles v-if="message.role === 'assistant'" :size="18" /><span v-else>{{ user.name?.slice(0, 1) || '我' }}</span></span><div class="message-body"><div class="message-author">{{ message.role === 'assistant' ? 'InsightOS' : user.name || '我' }}<small v-if="message.role === 'assistant'">基于知识库证据</small></div><div class="message-content">{{ message.content }}</div><div v-if="message.citations?.length" class="message-citations"><button v-for="(citation, index) in message.citations" :key="citation.chunk_id" :class="{ active: focusedMessageId === message.id && focusedCitationId === citation.chunk_id }" @click="focusCitation(message.id, citation)"><span>{{ index + 1 }}</span>{{ citation.document_name }}<small>{{ citationLocation(citation) }}</small></button></div><button v-if="message.role === 'assistant'" class="message-evidence-button" @click="focusedMessageId = message.id; traceOpen = true; evidenceOpen = true"><Layers3 :size="12" />查看检索轨迹 <ChevronRight :size="12" /></button></div></article>
               <article v-if="chatLoading && chatDraft" class="message assistant"><div class="message-body"><div class="message-author">InsightOS<small>生成中 · 待引用校验</small></div><div class="message-content">{{ chatDraft }}</div></div></article><div v-if="chatLoading" class="message assistant"><span class="message-avatar"><Sparkles :size="18" /></span><div class="thinking"><span></span><span></span><span></span><small>正在检索证据并组织答案…</small></div></div>
             </div>
             <div class="composer-wrap"><button v-if="chatLoading" class="btn secondary" type="button" @click="chatController?.abort()">停止生成</button><div v-if="lastResponse" class="response-meta"><span><CheckCheck :size="12" />{{ lastResponse.provider }}</span><span v-if="lastResponse.cached">缓存命中</span><span v-if="lastResponse.verification">{{ !lastResponse.verification.passed ? '回答核验失败 · 未展示未核验内容' : lastResponse.abstained ? '证据不足 · 已拒答' : lastResponse.verification.semantic_checked ? '事实核验通过' : lastResponse.verification.mode === 'numeric' ? '数字核对通过' : '原文摘录' }}</span><span>{{ lastResponse.citations.length }} 处来源</span></div><form class="composer" @submit.prevent="askQuestion"><textarea v-model="question" placeholder="输入你的问题，探索资料中的观点与证据…" aria-label="输入问题" rows="2" maxlength="8000" :disabled="chatLoading || historyLoading" @keydown.enter.exact="handleComposerEnter" /><div class="composer-bottom"><details class="scope-selector"><summary><Layers3 :size="14" /><span>{{ chatKbIds.length ? `已选择 ${chatKbIds.length} 个知识库` : '全部可访问知识库' }}</span><ChevronDown :size="13" /></summary><div class="scope-options"><p>下一次提问的检索范围。不勾选表示全部可访问知识库；历史回答仍以其附带来源为准。</p><label v-for="kb in knowledgeBases" :key="kb.id"><input type="checkbox" :checked="chatKbIds.includes(kb.id)" :disabled="chatLoading" @change="toggleId(chatKbIds, kb.id)" />{{ kb.name }}</label><span v-if="!knowledgeBases.length" class="muted">还没有知识库，请先上传文档。</span><label class="top-k">返回证据数量<select v-model="topK" :disabled="chatLoading"><option :value="3">3 段</option><option :value="5">5 段</option><option :value="8">8 段</option><option :value="10">10 段</option></select></label></div></details><button class="send-button" type="submit" aria-label="发送问题" :disabled="!question.trim() || chatLoading || historyLoading"><LoaderCircle v-if="chatLoading" :size="18" class="spin" /><ArrowUp v-else :size="19" /></button></div></form><div class="button-row"><button class="btn secondary" type="button" :disabled="question.trim().length < 5 || question.trim().length > 1200 || chatLoading || historyLoading" @click="startResearchFromChat"><FileSearch :size="15" />深度研究并生成报告</button><small class="muted">一次发起，自动研究、写作与保存 · 最多1200字</small></div><p class="composer-note">Enter 发送 · Shift + Enter 换行 · 请结合原文核实重要信息</p></div>
-          <ResearchStarters v-if="!messages.length && !historyLoading" @draft="question = $event" /></section>
+          <ResearchStarters v-if="!messages.length && !historyLoading" @draft="question = $event" /></template></section>
           <div v-if="evidenceOpen" class="evidence-drawer-backdrop" @click="evidenceOpen = false"></div><aside v-if="evidenceOpen" class="evidence-panel" :class="{ open: evidenceOpen }"><button class="icon-button evidence-close" aria-label="关闭证据栏" @click="evidenceOpen = false"><X :size="18" /></button><div class="evidence-heading"><h3><FileSearch :size="17" />引用来源</h3><span>{{ evidence.length }}</span></div><p class="evidence-description">回到原文，核对每一处依据。</p><div v-if="!evidence.length" class="evidence-empty"><div class="evidence-paper"><FileSearch :size="34" /></div><h4>等待发现相关知识</h4><p>提问后，相关文档片段、<br>来源页码与检索轨迹将在这里展示。</p></div><div v-else class="evidence-list"><article v-for="(citation, index) in evidence" :key="citation.chunk_id" class="evidence-card" :class="{ focused: focusedCitationId === citation.chunk_id }"><div class="evidence-card-title"><span>{{ index + 1 }}</span><strong>{{ citation.document_name }}</strong></div><div class="evidence-card-meta"><span>{{ citationLocation(citation) }}</span><span v-if="Number.isFinite(citation.score)" :title="'检索排序分数，不代表准确率'">排序分 {{ citation.score.toFixed(4) }}</span></div><p v-for="warning in citation.locator?.warnings || []" :key="warning" class="upload-hint">{{ warning }}</p><p>{{ citation.text }}</p><button class="text-button" @click="download(citation.document_id, citation.document_name, citation.revision_id)">查看原文 <ArrowDownToLine :size="12" /></button></article></div><details class="trace-panel" :open="traceOpen"><summary @click.prevent="traceOpen = !traceOpen"><Layers3 :size="15" />检索轨迹 <span>{{ trace.length }} 步</span><ChevronDown :size="13" /></summary><div v-if="!trace.length" class="trace-empty">运行一次问答后展示真实检索过程。</div><ol v-else><li v-for="(item, index) in trace" :key="index"><strong>{{ item.step }}</strong><pre>{{ display(item.detail) }}</pre></li></ol></details></aside>
         </div></main>
 
+      <DecisionCenter v-else-if="view === 'decisions'" :key="user.id" :initial-decision-id="decisionId" :initial-change-id="impactChangeId" @unauthorized="logout" @chat="go('chat')" @open-action="openAction" />
+      <ActionCenter v-else-if="view === 'actions'" :key="user.id" :initial-action-id="actionId" @open-decision="openDecision" @unauthorized="logout" @chat="go('chat')" />
       <DeepResearch v-else-if="view === 'research'" :knowledge-bases="knowledgeBases" :launch="researchLaunch" @launched="researchLaunch = null" />
-      <main v-else-if="view === 'evaluations'" class="page evaluation-page"><div class="page-heading"><div><span class="eyebrow">MEASURE WHAT MATTERS</span><h1>评测中心<span class="heading-dot">.</span></h1><p>用真实测试用例，衡量检索与回答的每一次进步。</p></div><span class="outline-chip"><FlaskConical :size="15" />Evidence over assumptions</span></div>
-        <div class="evaluation-intro"><span class="stat-icon teal"><FlaskConical :size="22" /></span><div><h3>好的答案，需要可验证的质量。</h3><p>填写问题、参考答案与期望文档，运行检索评测。配置真实模型后，可启用 Ragas 答案质量评测。</p></div><span class="outline-chip">无预设结果</span></div>
-        <ResearchEvaluation @completed="acceptResearchEvaluation" />
-        <section class="panel evaluation-builder"><div class="section-heading"><h2>创建评测 <span>TEST SUITE</span></h2><button class="text-button" :disabled="evaluating || comparing" @click="addCase"><Plus :size="15" />添加用例</button></div><div class="evaluation-config"><label>评测名称<input v-model="evaluationName" placeholder="例如：产品知识库回归评测" maxlength="120" /></label><div><span class="field-label">知识库范围 <small>不选时使用全部</small></span><div class="kb-chips"><button v-for="kb in knowledgeBases" :key="kb.id" :class="{ selected: evaluationKbIds.includes(kb.id) }" @click="toggleId(evaluationKbIds, kb.id)"><Check v-if="evaluationKbIds.includes(kb.id)" :size="12" /><BookOpen v-else :size="12" />{{ kb.name }}</button><span v-if="!knowledgeBases.length" class="muted">尚无知识库</span></div></div></div>
-          <div class="case-list"><div v-for="(testCase, index) in evaluationCases" :key="index" class="evaluation-case"><div class="case-heading"><span>CASE <strong>{{ String(index + 1).padStart(2, '0') }}</strong><em v-if="testCase.message_id" class="history-case-badge"><Clock3 :size="11" />历史答案 · 不重新生成</em></span><button class="icon-button danger-button" aria-label="删除用例" :disabled="evaluationCases.length === 1 || evaluating || comparing" @click="evaluationCases.splice(index, 1)"><Trash2 :size="15" /></button></div><div class="case-fields"><label>测试问题<textarea v-model="testCase.question" :readonly="!!testCase.message_id" :title="testCase.message_id ? '历史复评使用存档问题' : ''" rows="2" placeholder="希望从知识库中回答的问题" maxlength="8000" /></label><label>参考答案<textarea v-model="testCase.reference" rows="2" placeholder="用于比较的正确答案或关键要点" maxlength="20000" /></label></div><details class="expected-documents"><summary><FileCheck2 :size="14" />期望命中的文档 <span>{{ testCase.expected_document_ids?.length || 0 }} 份</span><ChevronDown :size="13" /></summary><p>用于真实命中率与 Dense / Hybrid 比较；请选中问题应引用的来源。</p><div class="expected-list"><label v-for="doc in documents.filter(d => !evaluationKbIds.length || evaluationKbIds.includes(d.knowledge_base_id))" :key="doc.id"><input type="checkbox" :checked="testCase.expected_document_ids?.includes(doc.id)" @change="toggleId(testCase.expected_document_ids!, doc.id)" /><span>{{ doc.name }}</span></label><span v-if="!documents.length" class="muted">上传文档后即可设置检索目标。</span></div></details></div></div>
-          <div class="evaluation-actions"><label class="checkbox-label"><input v-model="useRagas" type="checkbox" />启用 Ragas <small>需要配置真实模型</small></label><div class="button-row"><button class="btn secondary" :disabled="evaluating || comparing || !readyDocuments" @click="compareBaseline"><LoaderCircle v-if="comparing" :size="15" class="spin" /><Layers3 v-else :size="15" />比较检索基线</button><button class="btn primary" :disabled="evaluating || comparing || !readyDocuments" @click="runEvaluation"><LoaderCircle v-if="evaluating" :size="16" class="spin" /><FlaskConical v-else :size="16" />{{ evaluating ? '评测运行中…' : '运行评测' }}</button></div></div>
-        </section>
-        <section v-if="comparison" class="panel comparison-panel"><div class="section-heading"><h2>检索基线比较</h2><span class="outline-chip">同一测试集 · 同一知识范围</span></div><div class="comparison-grid"><div><span class="eyebrow">DENSE</span><h3>向量检索</h3><dl><template v-for="(value, key) in comparisonMetrics(comparison.dense)" :key="key"><dt>{{ metricNames[String(key)] || key }}</dt><dd>{{ metric(value) }}</dd></template></dl></div><div><span class="eyebrow">HYBRID</span><h3>混合检索</h3><dl><template v-for="(value, key) in comparisonMetrics(comparison.hybrid)" :key="key"><dt>{{ metricNames[String(key)] || key }}</dt><dd>{{ metric(value) }}</dd></template></dl></div><div class="comparison-delta"><span>命中率相对变化</span><strong>{{ typeof comparison.relative_hit_rate_change === 'number' ? `${comparison.relative_hit_rate_change > 0 ? '+' : ''}${(comparison.relative_hit_rate_change * 100).toFixed(1)}%` : '无法计算' }}</strong><p>仅反映当前测试集的实际结果。<br>基线为零时，相对变化可能无法计算。</p></div></div></section>
-        <div class="evaluation-results-layout"><section class="panel evaluation-results"><div class="section-heading"><h2>评测结果</h2><span v-if="evaluation" class="status-badge" :class="evaluation.status"><span class="status-dot"></span>{{ statusText(evaluation.status) }}</span></div><div v-if="evaluationLoading" class="empty-card"><LoaderCircle :size="22" class="spin" /><p>正在读取评测结果…</p></div><div v-else-if="!evaluation" class="empty-card"><span class="empty-icon"><FlaskConical :size="28" /></span><h3>让数据，给出判断</h3><p>运行评测或选择历史记录，查看真实指标与逐条结果。</p></div><template v-else><div class="result-title"><h3>{{ evaluation.name }}</h3><span>{{ date(evaluation.created_at) }}</span></div><div v-if="evaluation.error" class="alert error-alert">{{ evaluation.error }}</div><ResearchEvaluationResult v-if="evaluation.metrics?.kind === 'research_offline' && evaluation.results[0]" :result="evaluation.results[0]" /><div v-if="Object.keys(evaluation.metrics || {}).length" class="result-metrics"><div v-for="(value, key) in evaluation.metrics" :key="key"><span>{{ metricNames[String(key)] || key }}</span><strong>{{ metric(value) }}</strong></div></div><p v-else class="muted result-note">当前运行尚未返回指标。</p><details v-for="(result, index) in evaluation.results || []" :key="index" class="case-result"><summary><span class="case-number">{{ index + 1 }}</span><strong>{{ result.question || `用例 ${index + 1}` }}</strong><ChevronDown :size="15" /></summary><dl><template v-for="(value, key) in result" :key="key"><dt>{{ metricNames[String(key)] || key }}</dt><dd><pre>{{ display(value) }}</pre></dd></template></dl></details></template></section><aside class="panel evaluation-history"><div class="section-heading"><h2>历史运行</h2><span>{{ evaluations.length }}</span></div><div v-if="!evaluations.length" class="history-empty"><Clock3 :size="25" /><p>评测运行记录<br>会自动保存在这里。</p></div><button v-for="run in evaluations" :key="run.id" class="evaluation-history-item" :class="{ active: evaluation?.id === run.id }" @click="openEvaluation(run.id)"><span class="history-run-icon"><FlaskConical :size="16" /></span><span><strong>{{ run.name }}</strong><small>{{ date(run.created_at) }} · {{ statusText(run.status) }}</small></span><ChevronRight :size="14" /></button></aside></div>
-      </main>
-
       <GovernancePanel v-else-if="view === 'governance'" :on-changed="loadWorkspace" /><main v-else class="page system-page"><div class="page-heading"><div><span class="eyebrow">TRANSPARENT BY DESIGN</span><h1>系统与模型<span class="heading-dot">.</span></h1><p>了解当前运行环境，让每一项能力都有真实依据。</p></div><button class="btn secondary" :disabled="busy" @click="refreshSystem"><RefreshCw :size="15" :class="{ spin: busy }" />刷新状态</button></div><div class="runtime-banner"><span class="stat-icon teal"><ShieldCheck :size="25" /></span><div><h3>{{ runtime ? `当前运行模式：${runtime.mode}` : '暂未读取到运行状态' }}</h3><p>下列配置直接来自后端。演示模式、模型供应商与可选能力均按真实运行状态展示。</p></div><span class="status-badge" :class="health === 'online' ? 'ready' : health === 'degraded' || health === 'checking' ? 'queued' : 'failed'"><span class="status-dot"></span>{{ connectionText() }}</span></div><div v-if="runtime" class="provider-grid"><div v-for="provider in [{ name: 'Embedding', label: '文本向量模型', icon: Database, value: runtime.embedding_model ? `${runtime.embedding_provider} · ${runtime.embedding_model}` : runtime.embedding_provider }, { name: 'Language model', label: '回答生成模型', icon: Sparkles, value: runtime.llm_backend ? `${runtime.llm_backend} · ${runtime.llm_model || runtime.llm_provider}` : runtime.llm_provider }, { name: 'Reranker', label: '重排模型', icon: Layers3, value: runtime.reranker }, { name: 'Vector store', label: '向量存储', icon: Database, value: runtime.vector_store }, { name: 'Task queue', label: '异步任务队列', icon: Clock3, value: runtime.queue }]" :key="provider.name" class="panel provider-card"><component :is="provider.icon" :size="22" /><span class="eyebrow">{{ provider.name }}</span><h3>{{ provider.label }}</h3><pre>{{ display(provider.value) }}</pre></div></div><section v-if="runtime" class="panel feature-panel"><div class="section-heading"><h2>运行能力</h2><span class="outline-chip">LIVE CONFIGURATION</span></div><div class="feature-list"><div v-for="(value, key) in runtime.features" :key="key"><span>{{ key }}</span><span v-if="typeof value === 'boolean'" class="feature-value" :class="{ enabled: value }"><Check v-if="value" :size="14" />{{ value ? '已启用' : '未启用' }}</span><pre v-else>{{ display(value) }}</pre></div><div><span>单文件上传上限</span><strong>{{ runtime.max_upload_mb }} MB</strong></div><div><span>前端 API 地址</span><code>{{ API_BASE }}</code></div></div></section><div class="configuration-help"><CircleHelp :size="20" /><div><h3>需要切换模型或启用进阶能力？</h3><p>在项目根目录的 .env 中配置模型、Qdrant、Redis、OCR 或重排模型后，重启后端服务。密钥仅保存在服务端。</p></div></div></main>
     </div>
 

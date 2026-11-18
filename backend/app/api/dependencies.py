@@ -32,3 +32,18 @@ def current_user(request: Request, db: DB,
 
 
 CurrentUser = Annotated[User, Depends(current_user)]
+
+
+def session_recheck(request: Request, user_id: str):
+    """Fresh committed identity check for long-running inference boundaries."""
+    database, session_id = request.app.state.database, request.state.session_id
+
+    def check():
+        with database.session() as db:
+            user = db.get(User, user_id)
+            session = db.get(AuthSession, session_id)
+            if (user is None or user.disabled or session is None or session.user_id != user_id
+                    or session.revoked or session.expires_at <= utcnow()):
+                raise HTTPException(401, "会话已失效，请重新登录", headers={"WWW-Authenticate": "Bearer"})
+
+    return check

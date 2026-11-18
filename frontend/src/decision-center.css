@@ -1,0 +1,50 @@
+.decision-center { color: #30354d; overflow-y: auto; }
+.decision-center h2 { font-size: 21px; line-height: 1.5; margin: 16px 0; }
+.decision-center h3 { font-size: 16px; line-height: 1.6; }
+.decision-center p, .decision-center li { line-height: 1.75; }
+.decision-center button, .decision-center input, .decision-center textarea, .decision-center select { font: inherit; }
+.decision-center button:focus-visible, .decision-center input:focus-visible, .decision-center textarea:focus-visible, .decision-center select:focus-visible { outline: 3px solid #a9b7fa; outline-offset: 3px; }
+.dc-toolbar, .dc-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.dc-muted { color: #757b91; font-size: 13px; }
+.dc-tag { display: inline-flex; border-radius: 20px; padding: 5px 12px; background: #eef0ff; color: #5e56a9; font-size: 12px; }
+.dc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 20px; }
+.dc-card { text-align: left; padding: 24px; border: 1px solid #e4e7f3; border-radius: 18px; background: #fff; cursor: pointer; color: inherit; box-shadow: 0 5px 18px #3f4f8c05; overflow-wrap: anywhere; }
+.dc-card:hover { border-color: #a3a7ef; box-shadow: 0 8px 24px #6870ac14; }
+.dc-card .dc-tags { margin-top: 0; }
+.dc-card-choice { color: #5754a0; background: #f5f4ff; padding: 12px 16px; border-radius: 10px; white-space: pre-wrap; }
+.dc-card footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; color: #85899d; font-size: 12px; margin-top: 24px; }
+.dc-card footer span { color: #6460b5; }
+.dc-empty { text-align: center; padding: 64px 24px; border: 1px dashed #d7daf0; background: #fafaff; border-radius: 18px; margin: 24px 0; }
+.dc-notice { padding: 16px 20px; background: #f1f2ff; border: 1px solid #dedff5; border-radius: 12px; margin: 16px 0; }
+.dc-detail, .decision-content, .dc-editor { min-width: 0; overflow-wrap: anywhere; }
+.decision-content, .dc-editor, .dc-history { background: #fff; border: 1px solid #e4e7f3; border-radius: 18px; padding: 28px; margin: 20px 0; }
+.decision-content li, .decision-content h2, .decision-content h3 { white-space: pre-wrap; }
+.dc-content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 32px; margin: 24px 0; }
+.dc-content-grid ul { padding-left: 20px; }
+.dc-choice { padding: 20px 24px; background: linear-gradient(120deg, #f0f3ff, #f8f3ff); border-radius: 12px; border-left: 3px solid #8b7ed9; }
+.dc-choice h3 { font-size: 20px; margin: 10px 0 0; }
+.dc-basis { border-top: 1px solid #eceef6; padding-top: 16px; }
+.dc-source { padding: 16px; margin: 12px 0; border-radius: 10px; background: #f8f9fd; }
+.dc-source small { margin-left: 12px; color: #85899d; }
+.dc-source p { margin: 6px 0; font-size: 13px; }
+.dc-history-items { display: flex; flex-wrap: wrap; gap: 10px; }
+.dc-history-item { display: grid; text-align: left; gap: 8px; border: 1px solid #e1e4f4; border-radius: 10px; padding: 16px; background: #fafaff; color: #575d7c; cursor: pointer; }
+.dc-history-item[aria-pressed=true] { border-color: #8d83ce; background: #efedfc; }
+.dc-editor label { display: grid; gap: 8px; margin: 16px 0; }
+.dc-editor fieldset { padding: 0; margin: 0; border: none; min-width: 0; }
+.dc-editor textarea, .dc-editor input, .dc-editor select { width: 100%; box-sizing: border-box; }
+.dc-editor textarea { min-height: 90px; }
+.dc-option { display: flex; align-items: center; gap: 16px; }
+.dc-option label { flex: 1; }
+.decision-center .dc-check { display: flex; align-items: center; gap: 8px; margin: 16px 0; }
+.decision-center .dc-check input { width: auto; }
+.dc-action { border: 1px solid #ddcbe7; background: #fbf7ff; padding: 24px; border-radius: 14px; margin: 20px 0; }
+.decision-center .dc-danger { color: #a34768; }
+.dc-pagination { justify-content: flex-end; }
+@media (max-width: 720px) { .dc-content-grid { grid-template-columns: 1fr; } .decision-content, .dc-editor, .dc-history { padding: 18px; } .dc-toolbar { align-items: stretch; } .dc-card { padding: 18px; } }
+.action-fields { display: grid; gap: 16px; border: 0; padding: 12px 0; min-width: 0; }
+.action-fields label { display: grid; gap: 8px; }
+.action-fields label.dc-check { display: flex; }
+.action-fields input:not([type="checkbox"]), .action-fields textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+.action-body, .action-center .dc-history-item span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.action-center .dc-action p { overflow-wrap: anywhere; }

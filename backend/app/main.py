@@ -138,6 +138,18 @@ def create_app(settings=None):
     app.include_router(research_evaluation_router)
     from app.api.reports import router as reports_router
     app.include_router(reports_router)
+    from app.api.memories import router as memories_router
+    app.include_router(memories_router)
+    from app.api.decisions import router as decisions_router
+    app.include_router(decisions_router)
+    from app.api.decision_candidates import router as candidate_router
+    app.include_router(candidate_router)
+    from app.api.actions import router as actions_router
+    app.include_router(actions_router)
+    from app.api.source_changes import router as source_changes_router
+    app.include_router(source_changes_router)
+    from app.api.decision_impact import router as impact_router
+    app.include_router(impact_router)
     return app
 
 
